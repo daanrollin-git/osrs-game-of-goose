@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  event_organiser
+  event_admin
+  moderator
+  captain
+}
+
+enum EventStatus {
+  setup
+  registration
+  active
+  finished
+}
+
+enum TeamStatus {
+  unlocked
+  locked
+  pending
+  finished
+}
+
+enum SubmissionVerdict {
+  pending
+  auto_approved
+  approved
+  rejected
+}
+
+model User {
+  id            String   @id @default(cuid())
+  discordId     String   @unique
+  discordName   String
+  discordAvatar String?
+  role          Role     @default(captain)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  captainOf     Team[]
+  submissions   TileSubmission[]
+}
+
+model Event {
+  id                  String      @id @default(cuid())
+  name                String
+  tagword             String
+  autoApproveThreshold Int        @default(90)
+  status              EventStatus @default(setup)
+  tiles               Json
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  teams               Team[]
+
+  submitChannelId     String?
+  reviewChannelId     String?
+  updatesChannelId    String?
+}
+
+model Team {
+  id          String     @id @default(cuid())
+  name        String
+  color       String     @default("#6366f1")
+  position    Int        @default(0)
+  status      TeamStatus @default(unlocked)
+  finishOrder Int?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  event       Event      @relation(fields: [eventId], references: [id])
+  eventId     String
+
+  captain     User?      @relation(fields: [captainId], references: [id])
+  captainId   String?
+
+  submissions TileSubmission[]
+}
+
+model TileSubmission {
+  id               String            @id @default(cuid())
+  tileNumber       Int
+  screenshotUrl    String
+  aiVerdict        Boolean?
+  aiConfidence     Int?
+  aiReason         String?
+  verdict          SubmissionVerdict @default(pending)
+  adminNote        String?
+  discordMessageId String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  team             Team              @relation(fields: [teamId], references: [id])
+  teamId           String
+
+  submittedBy      User              @relation(fields: [submittedById], references: [id])
+  submittedById    String
+}
