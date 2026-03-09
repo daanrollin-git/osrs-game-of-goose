@@ -1,0 +1,13 @@
+{
+  "name": "osrs-game-of-goose",
+  "version": "1.0.0",
+  "description": "OSRS-themed Game of Goose board game for clan events",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
