@@ -1,4 +1,11 @@
 require('dotenv').config();
+const { validateEnv } = require('./src/validateEnv');
+
+validateEnv(['SESSION_SECRET', 'DATABASE_URL']);
+if (process.env.NODE_ENV === 'production') {
+  validateEnv(['DISCORD_CLIENT_ID', 'DISCORD_CLIENT_SECRET', 'DISCORD_REDIRECT_URI']);
+}
+
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
@@ -23,7 +30,7 @@ app.use(session({
   store: process.env.DATABASE_URL
     ? new PgSession({ conString: process.env.DATABASE_URL })
     : undefined,
-  secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 },

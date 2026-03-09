@@ -1,4 +1,3 @@
-require('dotenv').config();
 const express = require('express');
 const passport = require('passport');
 const { Strategy: DiscordStrategy } = require('passport-discord');
@@ -7,22 +6,32 @@ const prisma = require('./db');
 const router = express.Router();
 
 passport.use(new DiscordStrategy({
-  clientID: process.env.DISCORD_CLIENT_ID || 'placeholder',
-  clientSecret: process.env.DISCORD_CLIENT_SECRET || 'placeholder',
+  clientID: process.env.DISCORD_CLIENT_ID,
+  clientSecret: process.env.DISCORD_CLIENT_SECRET,
   callbackURL: process.env.DISCORD_REDIRECT_URI || 'http://localhost:3000/auth/discord/callback',
   scope: ['identify'],
 }, async (accessToken, refreshToken, profile, done) => {
   try {
-    const count = await prisma.user.count();
-    const user = await prisma.user.upsert({
-      where: { discordId: profile.id },
-      update: { discordName: profile.username, discordAvatar: profile.avatar },
-      create: {
-        discordId: profile.id,
-        discordName: profile.username,
-        discordAvatar: profile.avatar,
-        role: count === 0 ? 'event_organiser' : 'captain',
-      },
+    // Use a transaction to safely handle first-user role assignment.
+    // Without a transaction, two simultaneous logins could both see no existing
+    // users and both be promoted to event_organiser.
+    const user = await prisma.$transaction(async (tx) => {
+      const existing = await tx.user.findUnique({ where: { discordId: profile.id } });
+      if (existing) {
+        return tx.user.update({
+          where: { discordId: profile.id },
+          data: { discordName: profile.username, discordAvatar: profile.avatar },
+        });
+      }
+      const anyUser = await tx.user.findFirst({ select: { id: true } });
+      return tx.user.create({
+        data: {
+          discordId: profile.id,
+          discordName: profile.username,
+          discordAvatar: profile.avatar,
+          role: anyUser ? 'captain' : 'event_organiser',
+        },
+      });
     });
     return done(null, user);
   } catch (err) {
