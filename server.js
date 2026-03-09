@@ -47,9 +47,7 @@ app.use(passport.session());
 app.use('/auth', authRouter);
 
 app.use('/api/events', eventsRouter);
-// Team routes: /api/teams/:id/roll, /api/teams/:id, /api/events/:eventId/teams
 app.use('/api/teams', teamsRouter);
-app.use('/api/events', teamsRouter);
 
 // My team endpoint
 app.get('/api/my-team', requireAuth, async (req, res) => {
@@ -61,7 +59,8 @@ app.get('/api/my-team', requireAuth, async (req, res) => {
     if (!team) return res.status(404).json({ error: 'No team found' });
     res.json(team);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -78,7 +77,8 @@ app.get('/api/submissions/pending', requireAuth, requireRole(['event_organiser',
     });
     res.json(submissions);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -93,7 +93,8 @@ app.post('/api/submissions/:id/approve', requireAuth, requireRole(['event_organi
     req.app.get('io').emit('team:updated', sub.team);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -109,7 +110,8 @@ app.post('/api/submissions/:id/reject', requireAuth, requireRole(['event_organis
     req.app.get('io').emit('team:updated', sub.team);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -122,7 +124,8 @@ app.get('/api/users', requireAuth, requireRole(['event_organiser']), async (req,
     });
     res.json(users);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -134,7 +137,8 @@ app.patch('/api/users/:id/role', requireAuth, requireRole(['event_organiser']), 
     const user = await prisma.user.update({ where: { id: req.params.id }, data: { role } });
     res.json(user);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

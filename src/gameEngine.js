@@ -135,12 +135,19 @@ function resolveMove(team, steps, tiles, settings = {}) {
     for (let i = fromPos; i <= newPos; i++) path.push(i);
   } else {
     for (let i = fromPos; i <= 63; i++) path.push(i);
-    for (let i = 63; i >= newPos; i--) path.push(i);
+    for (let i = 62; i >= newPos; i--) path.push(i);
   }
 
   return { newPosition: newPos, path, tile: tiles[newPos] };
 }
 
+/**
+ * Applies a tile's special effect. NOTE: mutates `team.position` for jump/go_back actions.
+ * Always pass a copy of the team object: applySpecialEffect(special, { position: team.position })
+ * @param {object|null} special - The tile's special effect config
+ * @param {object} team - Mutable team object (only .position is read/written)
+ * @returns {object|null} Effect result descriptor
+ */
 function applySpecialEffect(special, team) {
   if (!special) return null;
   switch (special.action) {

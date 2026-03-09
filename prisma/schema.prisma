@@ -70,7 +70,9 @@ model Team {
   color       String     @default("#6366f1")
   position    Int        @default(0)
   status      TeamStatus @default(unlocked)
-  finishOrder Int?
+  finishOrder          Int?
+  skipTurns            Int        @default(0)
+  prisonTurnsRemaining Int        @default(0)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 

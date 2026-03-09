@@ -14,7 +14,8 @@ router.get('/', async (req, res) => {
     });
     res.json(events);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -32,7 +33,8 @@ router.get('/:id', async (req, res) => {
     if (!event) return res.status(404).json({ error: 'Event not found' });
     res.json(event);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -55,7 +57,8 @@ router.post('/', requireAuth, requireRole(['event_organiser']), async (req, res)
     });
     res.status(201).json(event);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -79,7 +82,24 @@ router.patch('/:id', requireAuth, requireRole(['event_organiser']), async (req, 
     res.json(event);
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Event not found' });
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/events/:id/teams — add team to event
+router.post('/:id/teams', requireAuth, requireRole(['event_organiser', 'event_admin']), async (req, res) => {
+  try {
+    const { name, color } = req.body;
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    const team = await prisma.team.create({
+      data: { name, color: color || '#6366f1', eventId: req.params.id },
+    });
+    req.app.get('io').emit('team:added', team);
+    res.status(201).json(team);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

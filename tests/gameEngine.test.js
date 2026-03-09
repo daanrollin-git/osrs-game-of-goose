@@ -50,3 +50,15 @@ test('applySpecialEffect mutates team position on jump', () => {
 test('applySpecialEffect returns null for no special', () => {
   expect(applySpecialEffect(null, {})).toBeNull();
 });
+
+test('resolveMove bounce path starts at fromPos, peaks at 63, ends at newPos', () => {
+  // 61 + 5 = 66 → overshoots by 3 → bounces to 60
+  // path goes forward through 63 then back: [61, 62, 63, 62, 61, 60]
+  const result = resolveMove({ position: 61 }, 5, tiles, { exactFinish: true });
+  expect(result.path[0]).toBe(61);
+  expect(result.path).toContain(63);
+  expect(result.path[result.path.length - 1]).toBe(60);
+  expect(result.newPosition).toBe(60);
+  // 63 should appear exactly once (no double-peak)
+  expect(result.path.filter(p => p === 63)).toHaveLength(1);
+});

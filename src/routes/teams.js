@@ -5,20 +5,6 @@ const { throwDice, resolveMove, applySpecialEffect } = require('../gameEngine');
 
 const router = express.Router();
 
-// POST /api/events/:eventId/teams — add team
-router.post('/:eventId/teams', requireAuth, requireRole(['event_organiser', 'event_admin']), async (req, res) => {
-  try {
-    const { name, color } = req.body;
-    if (!name) return res.status(400).json({ error: 'name is required' });
-    const team = await prisma.team.create({
-      data: { name, color: color || '#6366f1', eventId: req.params.eventId },
-    });
-    req.app.get('io').emit('team:added', team);
-    res.status(201).json(team);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // POST /api/teams/:id/roll — roll dice for a team
 router.post('/:id/roll', requireAuth, async (req, res) => {
@@ -54,16 +40,33 @@ router.post('/:id/roll', requireAuth, async (req, res) => {
 
     const newStatus = tile.type === 'goose' ? 'unlocked' : 'locked';
 
+    const updateData = { position: finalPosition, status: newStatus };
+
+    if (specialEffect?.skipTurns) {
+      updateData.skipTurns = specialEffect.skipTurns;
+    }
+    if (specialEffect?.prison) {
+      updateData.prisonTurnsRemaining = specialEffect.turns;
+      updateData.status = 'locked'; // prison also locks
+    }
+    // Reset skip/prison on new roll
+    if (!specialEffect?.skipTurns && !specialEffect?.prison) {
+      updateData.skipTurns = 0;
+      updateData.prisonTurnsRemaining = 0;
+    }
+
     const updated = await prisma.team.update({
       where: { id: team.id },
-      data: { position: finalPosition, status: newStatus },
+      data: updateData,
     });
 
     const io = req.app.get('io');
     io.emit('team:rolled', { team: updated, dice, total, path, tile, specialEffect });
     res.json({ team: updated, dice, total, path, tile, specialEffect });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Team not found' });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -81,7 +84,8 @@ router.patch('/:id', requireAuth, requireRole(['event_organiser', 'event_admin']
     res.json(team);
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Team not found' });
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -98,7 +102,8 @@ router.post('/:id/claim-captain', requireAuth, async (req, res) => {
     });
     res.json(updated);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
