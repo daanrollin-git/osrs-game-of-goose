@@ -15,6 +15,10 @@ const { createServer } = require('http');
 const { Server } = require('socket.io');
 
 const authRouter = require('./src/auth');
+const prisma = require('./src/db');
+const { requireAuth, requireRole } = require('./src/middleware/requireAuth');
+const eventsRouter = require('./src/routes/events');
+const teamsRouter = require('./src/routes/teams');
 
 const app = express();
 const httpServer = createServer(app);
@@ -42,6 +46,98 @@ app.use(passport.session());
 // Routes
 app.use('/auth', authRouter);
 
+app.use('/api/events', eventsRouter);
+// Team routes: /api/teams/:id/roll, /api/teams/:id, /api/events/:eventId/teams
+app.use('/api/teams', teamsRouter);
+app.use('/api/events', teamsRouter);
+
+// My team endpoint
+app.get('/api/my-team', requireAuth, async (req, res) => {
+  try {
+    const team = await prisma.team.findFirst({
+      where: { captainId: req.user.id, event: { status: 'active' } },
+      include: { event: true },
+    });
+    if (!team) return res.status(404).json({ error: 'No team found' });
+    res.json(team);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Submission routes
+app.get('/api/submissions/pending', requireAuth, requireRole(['event_organiser', 'event_admin', 'moderator']), async (req, res) => {
+  try {
+    const submissions = await prisma.tileSubmission.findMany({
+      where: { verdict: 'pending' },
+      include: {
+        team: { include: { event: { select: { name: true, tiles: true } } } },
+        submittedBy: { select: { discordName: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json(submissions);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/submissions/:id/approve', requireAuth, requireRole(['event_organiser', 'event_admin', 'moderator']), async (req, res) => {
+  try {
+    const sub = await prisma.tileSubmission.update({
+      where: { id: req.params.id },
+      data: { verdict: 'approved' },
+      include: { team: true },
+    });
+    await prisma.team.update({ where: { id: sub.teamId }, data: { status: 'unlocked' } });
+    req.app.get('io').emit('team:updated', sub.team);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/submissions/:id/reject', requireAuth, requireRole(['event_organiser', 'event_admin', 'moderator']), async (req, res) => {
+  try {
+    const { note } = req.body;
+    const sub = await prisma.tileSubmission.update({
+      where: { id: req.params.id },
+      data: { verdict: 'rejected', adminNote: note },
+      include: { team: true },
+    });
+    await prisma.team.update({ where: { id: sub.teamId }, data: { status: 'locked' } });
+    req.app.get('io').emit('team:updated', sub.team);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// User management (event_organiser only)
+app.get('/api/users', requireAuth, requireRole(['event_organiser']), async (req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      select: { id: true, discordName: true, discordId: true, role: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/api/users/:id/role', requireAuth, requireRole(['event_organiser']), async (req, res) => {
+  try {
+    const { role } = req.body;
+    const validRoles = ['event_organiser', 'event_admin', 'moderator', 'captain'];
+    if (!validRoles.includes(role)) return res.status(400).json({ error: 'Invalid role' });
+    const user = await prisma.user.update({ where: { id: req.params.id }, data: { role } });
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Static files
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -55,10 +151,12 @@ io.on('connection', (socket) => {
   });
 });
 
-httpServer.listen(PORT, () => {
-  console.log(`\n🎲 OSRS Game of Goose running!`);
-  console.log(`   Board view:  http://localhost:${PORT}`);
-  console.log(`   Admin panel: http://localhost:${PORT}/admin.html\n`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  httpServer.listen(PORT, () => {
+    console.log(`\n🎲 OSRS Game of Goose running!`);
+    console.log(`   Board view:  http://localhost:${PORT}`);
+    console.log(`   Admin panel: http://localhost:${PORT}/admin.html\n`);
+  });
+}
 
-module.exports = { app, io };
+module.exports = { app, io, httpServer };
